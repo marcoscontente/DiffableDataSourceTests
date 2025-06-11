@@ -36,33 +36,52 @@ class ViewController: UIViewController {
     ]
 
     private lazy var tableView: UITableView = {
-        UITableView(frame: view.bounds)
+        let tableView = UITableView(frame: view.bounds, style: .grouped)
+        tableView.dataSource = dataSource
+        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
+        return tableView
     }()
 
     private var dataSource: UITableViewDiffableDataSource<Section, Item>!
 
+    private class DataSource: UITableViewDiffableDataSource<Section, Item> {
+        override func tableView(_ tableView: UITableView, titleForHeaderInSection sectionIndex: Int) -> String? {
+            let section = snapshot().sectionIdentifiers[sectionIndex]
+            return section.title
+        }
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
         view.addSubview(tableView)
 
-        dataSource = UITableViewDiffableDataSource(tableView: tableView) { tableView, indexPath, item in
+        dataSource = DataSource(tableView: tableView) { tableView, indexPath, item in
             let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
             cell.textLabel?.text = item.name
             return cell
         }
-
-        tableView.dataSource = dataSource
 
         applySnapshot()
     }
 
     private func applySnapshot() {
         var snapshot = NSDiffableDataSourceSnapshot<Section, Item>()
-        snapshot.appendSections(Section.allCases)
 
-        snapshot.appendItems(allItems)
+        let countsBySection: [Section: Int] = allItems.reduce(into: [:]) { dict, item in
+            dict[item.category, default: 0] += 1
+        }
+
+        let sortedSections = Section.allCases.sorted { lhs, rhs in
+            countsBySection[lhs, default: 0] > countsBySection[rhs, default: 0]
+        }
+
+        snapshot.appendSections(sortedSections)
+
+        for section in sortedSections {
+            let itemsInSection = allItems.filter { $0.category == section }
+            snapshot.appendItems(itemsInSection, toSection: section)
+        }
 
         dataSource.apply(snapshot, animatingDifferences: true)
     }
